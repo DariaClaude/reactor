@@ -250,14 +250,77 @@ var ACHS = [
       return s.batteries.energy >= 80 && s.batteries.spirit >= 80 && s.batteries.focus >= 80; } }
 ];
 
+/* ── АВТОПЛАНИРОВЩИК ── */
+var PLANNER = {
+  size: 5,            // будни: компактный план
+  weekendSize: 4,     // выходные: легче
+  anchor: [2026, 6, 8], // 08.07.2026 — точка отсчёта директорских дней (раз в 2 недели, среда)
+  rituals: [
+    { name:"Зарядка утром",     e:{energy:10,spirit:0,focus:5},  weekend:true  },
+    { name:"Планирование дня",  e:{energy:0, spirit:0,focus:10}, weekend:false }
+  ]
+};
+function stripTime(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function buildPlan() {
+  var now = new Date(); var dow = now.getDay();
+  var weekend = (dow === 0 || dow === 6);
+  var target = weekend ? PLANNER.weekendSize : PLANNER.size;
+  var names = {};
+  state.tasks.forEach(function(t){ names[t.name] = 1; });
+  state.done.filter(function(t){ return t.doneAt === today(); }).forEach(function(t){ names[t.name] = 1; });
+  var added = 0;
+  function push(name, e) {
+    if (names[name]) return false;
+    names[name] = 1; added++;
+    state.tasks.push({ id: Date.now() + Math.floor(Math.random()*100000), name: name, effects: Object.assign({}, e) });
+    return true;
+  }
+  /* фиксированные события по расписанию Дарьи */
+  if (dow === 3) {
+    push("Оперсовет 11:00–13:00", {energy:-10,spirit:0,focus:-5});
+    var anchor = new Date(PLANNER.anchor[0], PLANNER.anchor[1], PLANNER.anchor[2]);
+    var diffDays = Math.round((stripTime(now) - anchor) / 86400000);
+    if (diffDays >= 0 && (diffDays / 7) % 2 === 0)
+      push("Директорский день 14:00", {energy:-15,spirit:5,focus:10});
+  }
+  /* утренние ритуалы */
+  PLANNER.rituals.forEach(function(r){ if (!weekend || r.weekend) push(r.name, r.e); });
+  /* умный добор: приоритет — самая разряженная батарея; в выходные без рабочего фокуса */
+  var catOf = { energy:"body", spirit:"spirit", focus:"focus" };
+  function pickFrom(catId) {
+    var cat = PRESET_CATS.find(function(c){ return c.id === catId; });
+    var pool = cat.items.filter(function(i){ return !names[i.name]; });
+    if (!pool.length) return false;
+    var p = pool[Math.floor(Math.random() * pool.length)];
+    return push(p.name, p.e);
+  }
+  var guard = 0;
+  while (state.tasks.length < target && guard++ < 20) {
+    var order = CORES.slice().sort(function(a,b){ return state.batteries[a.id] - state.batteries[b.id]; });
+    var ok = false;
+    for (var i = 0; i < order.length && !ok; i++) {
+      var catId = catOf[order[i].id];
+      if (weekend && catId === "focus") ok = pickFrom("home") || pickFrom("spirit");
+      else ok = pickFrom(catId);
+    }
+    if (!ok) break;
+  }
+  /* в плане всегда есть что-то для Духа */
+  if (!state.tasks.some(function(t){ return t.effects.spirit >= 10; })) pickFrom("spirit");
+  if (added) pushLog("План дня собран автоматически: +" + added);
+  state.planDate = today();
+}
+
 var state = load();
 var ui = { showForm:false, title:"", effects:{energy:0,spirit:0,focus:0}, bursts:{} };
 handleNewDay();
+if (state.planDate !== today()) { buildPlan(); save(); }
+
 
 function load() {
   var def = { batteries:{energy:60,spirit:60,focus:60}, tasks:[], done:[], xp:0, log:[],
               streak:{count:0,lastDate:null}, combo:{count:0,date:null},
-              history:[], lastVisit:null, totalDone:0, ach:[] };
+              history:[], lastVisit:null, totalDone:0, ach:[], planDate:null };
   try {
     var raw = localStorage.getItem(KEY);
     if (raw) { var p = JSON.parse(raw); for (var k in def) if (!(k in p)) p[k] = def[k]; return p; }
@@ -517,7 +580,7 @@ function render() {
 
   h += '<div class="panel" style="margin-top:12px">';
   h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">';
-  h += '<h2>ЗАДАЧИ</h2><span style="font-size:12px;color:#5E6B8C">'+state.tasks.length+' в плане</span></div>';
+  h += '<h2>ЗАДАЧИ</h2><span><button class="preset" onclick="buildPlan();save();render()">⟳ собрать день</button></span></div>';
   if (!state.tasks.length && !ui.showForm)
     h += '<p class="empty">Реактору нужно топливо. Добавьте задачу — или возьмите готовую из шаблонов.</p>';
   h += state.tasks.map(function(t){
