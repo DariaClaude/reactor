@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="theme-color" content="#05070F"/>
+<meta name="robots" content="noindex"/>
+<title>Лид-борд · РМ Групп</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;700;900&family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: radial-gradient(1100px 500px at 70% -10%, rgba(255,176,32,0.10), transparent 60%),
+                radial-gradient(800px 500px at 10% 110%, rgba(124,107,255,0.08), transparent 55%), #05070F;
+    font-family: 'Manrope', system-ui, sans-serif; color: #E8ECF8;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: max(26px, env(safe-area-inset-top)) 16px 48px; }
+  .panel { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,176,32,0.16);
+    border-radius: 18px; padding: 18px; backdrop-filter: blur(8px);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4); }
+  h1 { font-family:'Unbounded',sans-serif; font-weight: 900; font-size: 24px; margin: 6px 0 4px;
+       color: #fff; letter-spacing: 1px; text-shadow: 0 0 24px rgba(255,176,32,0.4); }
+  h1 b { color: #FFB020; font-weight: 900; }
+  h2 { font-family:'Unbounded',sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 2px; color: #C9D2E8; }
+  .date { font-size: 11px; color: #5E6B8C; letter-spacing: 3px; text-transform: uppercase; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 16px; }
+  .kpi { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,176,32,0.18); border-radius: 16px;
+         padding: 16px 14px; text-align: center; }
+  .kpi b { display: block; font-family:'Unbounded',sans-serif; font-size: 30px; font-weight: 700;
+           color: #FFB020; text-shadow: 0 0 16px rgba(255,176,32,0.6); }
+  .kpi span { font-size: 10.5px; color: #5E6B8C; letter-spacing: 1px; text-transform: uppercase; }
+  .kpi.mint b { color: #3DFFC5; text-shadow: 0 0 16px rgba(61,255,197,0.6); }
+  .kpi.violet b { color: #7C6BFF; text-shadow: 0 0 16px rgba(124,107,255,0.6); }
+  .sites { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .sitechip { border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.04);
+    color: #C9D2E8; border-radius: 20px; padding: 6px 14px; font-size: 12.5px; font-weight: 700;
+    font-family: inherit; cursor: pointer; }
+  .sitechip.on { border-color: rgba(255,176,32,0.7); color: #FFB020;
+    box-shadow: 0 0 10px rgba(255,176,32,0.3); }
+  .sitechip i { font-style: normal; opacity: .6; margin-left: 5px; }
+  .lead { display: flex; gap: 12px; padding: 12px 4px; border-bottom: 1px solid rgba(255,255,255,0.05);
+          align-items: flex-start; }
+  .lead .dot { width: 9px; height: 9px; border-radius: 5px; margin-top: 5px; flex-shrink: 0; }
+  .lead .who { font-size: 14px; font-weight: 700; color: #E8ECF8; }
+  .lead .meta { font-size: 12px; color: #5E6B8C; margin-top: 2px; }
+  .lead .meta a { color: #3DFFC5; text-decoration: none; font-weight: 700; }
+  .lead .cmt { font-size: 12px; color: #8B96B4; margin-top: 4px; font-style: italic; }
+  .lead .site { font-size: 10px; font-weight: 800; letter-spacing: .5px; border-radius: 6px;
+    padding: 2px 8px; white-space: nowrap; }
+  .lead time { font-size: 11px; color: #5E6B8C; white-space: nowrap; margin-left: auto; padding-left: 8px; }
+  .fresh { color: #3DFFC5 !important; font-weight: 800; text-shadow: 0 0 8px rgba(61,255,197,0.5); }
+  .chartbox svg { display: block; width: 100%; height: auto; }
+  .btn { border: 1px solid rgba(255,176,32,0.5); border-radius: 10px;
+    background: linear-gradient(135deg, rgba(255,176,32,0.22), rgba(255,107,53,0.12));
+    color: #fff; padding: 10px 16px; font-family:'Unbounded',sans-serif;
+    font-size: 10px; font-weight: 700; letter-spacing: 1.5px; cursor: pointer;
+    box-shadow: 0 0 20px rgba(255,176,32,0.2); }
+  .ghostbtn { border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #5E6B8C;
+    border-radius: 10px; padding: 9px 14px; font-size: 12px; font-family: inherit; cursor: pointer; }
+  input[type=text], input[type=password] { width: 100%; padding: 11px 13px; border-radius: 10px;
+    border: 1px solid rgba(255,176,32,0.35); font-size: 14px; font-family: inherit;
+    background: #0B1024; color: #E8ECF8; margin-top: 8px; }
+  .hint { font-size: 12px; color: #5E6B8C; line-height: 1.55; }
+  .statusline { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #5E6B8C; }
+  .statusdot { width: 8px; height: 8px; border-radius: 4px; }
+  .empty { font-size: 13.5px; color: #5E6B8C; line-height: 1.5; padding: 8px 0; }
+  button:focus-visible, input:focus-visible { outline: 2px solid #FFB020; outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script>
+"use strict";
+var CFG_KEY = "leadboard-settings";
+var DEFAULT_URL = "https://script.google.com/macros/s/AKfycbxgL5kKDfYviyqbif6DmMvJDI0O_nFK7BwGzRr76SjEuiSDPow0NVCyA7w1AFCiZNbR/exec";
+var SITE_COLORS = [
+  ["255,176,32", "#FFB020"], ["61,255,197", "#3DFFC5"], ["124,107,255", "#7C6BFF"],
+  ["255,107,53", "#FF6B35"], ["59,130,246", "#3B82F6"], ["255,92,122", "#FF5C7A"],
+  ["0,184,169", "#00B8A9"], ["232,161,60", "#E8A13C"]
+];
+
+var cfg = loadCfg();
+var data = { rows: [], cols: {}, loadedAt: null, error: null, loading: false };
+var ui = { site: null, editCfg: !cfg.key };
+var refreshTimer = null;
+
+function loadCfg() {
+  try { var raw = localStorage.getItem(CFG_KEY); if (raw) return JSON.parse(raw); } catch(e) {}
+  return { url: DEFAULT_URL, key: "" };
+}
+function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch(e) {} }
+function esc(s) { return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+/* ── определение колонок по заголовкам ── */
+function detectCols(headers) {
+  var h = headers.map(function(x){ return String(x).toLowerCase(); });
+  function find(words) {
+    for (var i = 0; i < h.length; i++)
+      for (var w = 0; w < words.length; w++)
+        if (h[i].indexOf(words[w]) !== -1) return i;
+    return -1;
+  }
+  return {
+    ts:      find(["time","дата","date","врем"]) !== -1 ? find(["time","дата","date","врем"]) : 0,
+    site:    find(["site","сайт","источ"]),
+    name:    find(["name","имя"]),
+    phone:   find(["phone","тел"]),
+    email:   find(["mail","почта"]),
+    comment: find(["comment","коммент","сообщ"])
+  };
+}
+function cell(row, idx) { return idx >= 0 && idx < row.length ? row[idx] : ""; }
+function rowDate(row) {
+  var v = cell(row, data.cols.ts);
+  var d = new Date(v);
+  return isNaN(d) ? null : d;
+}
+function dayKey(d) { return d.toLocaleDateString("ru-RU"); }
+function timeAgo(d) {
+  var m = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (m < 1) return "только что";
+  if (m < 60) return m + " мин назад";
+  var h = Math.floor(m / 60);
+  if (h < 24) return h + " ч назад";
+  var days = Math.floor(h / 24);
+  if (days === 1) return "вчера";
+  return d.toLocaleDateString("ru-RU");
+}
+function siteColor(name) {
+  var sites = uniqueSites();
+  var i = Math.max(0, sites.indexOf(name)) % SITE_COLORS.length;
+  return SITE_COLORS[i];
+}
+function uniqueSites() {
+  var seen = {}, out = [];
+  data.rows.forEach(function(r){
+    var s = String(cell(r, data.cols.site) || "—");
+    if (!seen[s]) { seen[s] = 1; out.push(s); }
+  });
+  return out;
+}
+
+/* ── загрузка ── */
+function fetchLeads() {
+  if (!cfg.key) return;
+  data.loading = true; data.error = null; render();
+  var url = cfg.url + "?action=list&key=" + encodeURIComponent(cfg.key);
+  fetch(url)
+    .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(function(d){
+      if (!d.ok) throw new Error("ключ не подошёл — проверьте секрет в настройках");
+      data.cols = detectCols(d.headers || []);
+      data.rows = (d.rows || []).slice().reverse(); /* свежие сверху */
+      data.loadedAt = new Date(); data.loading = false;
+      render();
+    })
+    .catch(function(e){ data.error = String(e.message || e); data.loading = false; render(); });
+}
+function startAutoRefresh() {
+  clearInterval(refreshTimer);
+  refreshTimer = setInterval(fetchLeads, 60000);
+}
+
+/* ── настройки ── */
+function saveSettings() {
+  var u = document.getElementById("cfgUrl").value.trim();
+  var k = document.getElementById("cfgKey").value.trim();
+  if (u) cfg.url = u;
+  cfg.key = k;
+  saveCfg(); ui.editCfg = false;
+  fetchLeads(); startAutoRefresh();
+}
+
+/* ── статистика ── */
+function stats() {
+  var now = new Date();
+  var todayK = dayKey(now);
+  var y = new Date(); y.setDate(y.getDate()-1);
+  var yK = dayKey(y);
+  var weekAgo = Date.now() - 7*86400000;
+  var s = { today:0, yesterday:0, week:0, total:data.rows.length, bySite:{}, byDay:{} };
+  data.rows.forEach(function(r){
+    var d = rowDate(r); if (!d) return;
+    var k = dayKey(d);
+    var site = String(cell(r, data.cols.site) || "—");
+    if (k === todayK) { s.today++; s.bySite[site] = (s.bySite[site]||0)+1; }
+    if (k === yK) s.yesterday++;
+    if (d.getTime() >= weekAgo) { s.week++; s.byDay[k] = (s.byDay[k]||0)+1; }
+  });
+  return s;
+}
+function chartHTML(s) {
+  var days = [];
+  for (var i = 6; i >= 0; i--) { var d = new Date(); d.setDate(d.getDate()-i); days.push(d); }
+  var vals = days.map(function(d){ return s.byDay[dayKey(d)] || 0; });
+  var max = Math.max.apply(null, vals.concat([1]));
+  var W = 700, H = 150, pad = 16, bw = (W - 2*pad) / 7 - 12;
+  var bars = days.map(function(d, i){
+    var v = vals[i];
+    var bh = Math.round((v / max) * (H - 50));
+    var x = pad + i * ((W - 2*pad) / 7) + 6;
+    var yTop = H - 30 - bh;
+    var isToday = i === 6;
+    var col = isToday ? "#FFB020" : "rgba(255,176,32,0.45)";
+    return '<rect x="'+x+'" y="'+yTop+'" width="'+bw+'" height="'+Math.max(bh,2)+'" rx="6" fill="'+col+'"'+(isToday?' style="filter:drop-shadow(0 0 8px rgba(255,176,32,0.8))"':'')+'/>' +
+      (v ? '<text x="'+(x+bw/2)+'" y="'+(yTop-7)+'" font-size="13" font-weight="800" fill="#FFB020" text-anchor="middle">'+v+'</text>' : '') +
+      '<text x="'+(x+bw/2)+'" y="'+(H-8)+'" font-size="10" fill="#5E6B8C" text-anchor="middle">'+d.toLocaleDateString("ru-RU",{weekday:"short"})+'</text>';
+  }).join("");
+  return '<div class="chartbox"><svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Заявки за 7 дней">'+bars+'</svg></div>';
+}
+
+/* ── отрисовка ── */
+function render() {
+  var h = '';
+  h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px">';
+  h += '<div><div class="date">'+new Date().toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"})+'</div>';
+  h += '<h1>ЛИД-БОРД <b>РМ Групп</b></h1>';
+  var dotCol = data.error ? "#FF5C7A" : data.loading ? "#FFB020" : data.loadedAt ? "#3DFFC5" : "#39435E";
+  h += '<div class="statusline"><span class="statusdot" style="background:'+dotCol+';box-shadow:0 0 8px '+dotCol+'"></span>' +
+    (data.error ? esc(data.error) :
+     data.loading ? "загружаю заявки…" :
+     data.loadedAt ? "обновлено в " + data.loadedAt.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}) + " · автообновление каждую минуту" :
+     "укажите секретный ключ в настройках") + '</div></div>';
+  h += '<div style="display:flex;gap:8px"><button class="btn" onclick="fetchLeads()">ОБНОВИТЬ</button>' +
+       '<button class="ghostbtn" onclick="ui.editCfg=!ui.editCfg;render()">⚙</button></div></div>';
+
+  if (ui.editCfg) {
+    h += '<div class="panel" style="margin-bottom:14px"><h2>НАСТРОЙКИ</h2>' +
+      '<p class="hint" style="margin-top:8px">Адрес скрипта Google (уже заполнен) и секретный ключ — тот, что вы впишете в Apps Script:</p>' +
+      '<input type="text" id="cfgUrl" value="'+esc(cfg.url)+'" placeholder="URL скрипта"/>' +
+      '<input type="password" id="cfgKey" value="'+esc(cfg.key)+'" placeholder="Секретный ключ"/>' +
+      '<div style="margin-top:12px;display:flex;gap:8px"><button class="btn" onclick="saveSettings()">СОХРАНИТЬ</button></div></div>';
+  }
+
+  if (data.rows.length) {
+    var s = stats();
+    h += '<div class="kpis">' +
+      '<div class="kpi"><b>'+s.today+'</b><span>сегодня</span></div>' +
+      '<div class="kpi violet"><b>'+s.yesterday+'</b><span>вчера</span></div>' +
+      '<div class="kpi mint"><b>'+s.week+'</b><span>за 7 дней</span></div>' +
+      '<div class="kpi"><b>'+s.total+'</b><span>всего в базе</span></div></div>';
+
+    h += '<div class="panel" style="margin-top:14px"><h2>ЗАЯВКИ ПО ДНЯМ</h2>' + chartHTML(s) + '</div>';
+
+    /* фильтр по сайтам */
+    var sites = uniqueSites();
+    if (sites.length > 1) {
+      h += '<div class="sites">';
+      h += '<button class="sitechip'+(ui.site===null?' on':'')+'" onclick="ui.site=null;render()">Все</button>';
+      sites.forEach(function(st){
+        var cnt = data.rows.filter(function(r){ return String(cell(r,data.cols.site)||"—")===st; }).length;
+        h += '<button class="sitechip'+(ui.site===st?' on':'')+'" onclick="ui.site='+JSON.stringify(st).replace(/"/g,"&quot;")+';render()">'+esc(st)+'<i>'+cnt+'</i></button>';
+      });
+      h += '</div>';
+    }
+
+    /* список заявок */
+    var rows = data.rows.filter(function(r){
+      return ui.site === null || String(cell(r,data.cols.site)||"—") === ui.site;
+    }).slice(0, 50);
+    h += '<div class="panel" style="margin-top:14px"><h2>ПОСЛЕДНИЕ ЗАЯВКИ</h2><div style="margin-top:6px">';
+    rows.forEach(function(r){
+      var d = rowDate(r);
+      var freshMin = d ? (Date.now()-d.getTime())/60000 : 9999;
+      var fresh = freshMin < 60;
+      var site = String(cell(r,data.cols.site)||"—");
+      var c = siteColor(site);
+      var phone = String(cell(r,data.cols.phone)||"").trim();
+      var email = String(cell(r,data.cols.email)||"").trim();
+      var cmt = String(cell(r,data.cols.comment)||"").trim();
+      h += '<div class="lead">' +
+        '<span class="dot" style="background:'+(fresh?'#3DFFC5':'#39435E')+';'+(fresh?'box-shadow:0 0 8px rgba(61,255,197,0.8)':'')+'"></span>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div class="who">'+esc(cell(r,data.cols.name)||"Без имени")+
+          ' <span class="site" style="color:'+c[1]+';background:rgba('+c[0]+',0.10);border:1px solid rgba('+c[0]+',0.3)">'+esc(site)+'</span></div>' +
+          '<div class="meta">' +
+            (phone ? '<a href="tel:'+esc(phone.replace(/[^+\d]/g,""))+'">'+esc(phone)+'</a>' : '') +
+            (phone && email ? ' · ' : '') + (email ? esc(email) : '') + '</div>' +
+          (cmt ? '<div class="cmt">«'+esc(cmt)+'»</div>' : '') +
+        '</div>' +
+        '<time'+(fresh?' class="fresh"':'')+'>'+(d ? timeAgo(d) : "")+'</time></div>';
+    });
+    if (!rows.length) h += '<p class="empty">По этому сайту заявок пока нет.</p>';
+    h += '</div></div>';
+  } else if (!data.loading && !data.error && cfg.key) {
+    h += '<div class="panel"><p class="empty">Заявок пока не видно. Проверьте, что в Apps Script добавлен блок list и сделан новый деплой.</p></div>';
+  } else if (!cfg.key && !ui.editCfg) {
+    h += '<div class="panel"><p class="empty">Для подключения к таблице заявок нажмите ⚙ и укажите секретный ключ.</p></div>';
+  }
+
+  document.getElementById("app").innerHTML = h;
+}
+
+render();
+if (cfg.key) { fetchLeads(); startAutoRefresh(); }
+</script>
+</body>
+</html>
