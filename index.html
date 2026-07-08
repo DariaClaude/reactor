@@ -483,9 +483,22 @@ function restore() {
   } catch(e) { toast("Не похоже на копию Реактора — проверьте текст"); }
 }
 
+/* ── прогноз на вечер: текущий заряд + эффекты невыполненных задач ── */
+function forecast() {
+  var f = { energy: state.batteries.energy, spirit: state.batteries.spirit, focus: state.batteries.focus };
+  state.tasks.forEach(function(t){
+    for (var k in t.effects) f[k] = clamp(f[k] + t.effects[k]);
+  });
+  return f;
+}
+
 /* ── отрисовка ── */
 function coreHTML(c) {
   var v = state.batteries[c.id];
+  var fv = forecast()[c.id];
+  var marker = Math.abs(fv - v) >= 3
+    ? '<div style="position:absolute;left:3px;right:3px;bottom:'+fv+'%;border-top:2px dashed rgba('+c.g+',0.85);filter:drop-shadow(0 0 4px rgba('+c.g+',0.8))" title="прогноз на вечер"></div>'
+    : '';
   var it = 0.25 + (v / 100) * 0.75;
   var low = v <= 20;
   var burst = ui.bursts[c.id] && (Date.now() - ui.bursts[c.id] < 900)
@@ -497,7 +510,7 @@ function coreHTML(c) {
         '<div class="fill" style="height:'+v+'%;background:linear-gradient(180deg,rgba('+c.g+',0.95),'+c.neon2+');box-shadow:0 0 24px rgba('+c.g+',0.9)">' +
           '<div class="flow"></div><div class="meniscus"></div></div>' +
         [25,50,75].map(function(m){ return '<div class="tick" style="bottom:'+m+'%;background:rgba('+c.g+',0.45)"></div>'; }).join('') +
-        '<div class="pct"><b style="text-shadow:0 0 14px rgba('+c.g+',1),0 1px 3px rgba(0,0,0,0.5)">'+v+'</b><s style="text-shadow:0 0 8px rgba('+c.g+',1)">%</s></div>' +
+        marker + '<div class="pct"><b style="text-shadow:0 0 14px rgba('+c.g+',1),0 1px 3px rgba(0,0,0,0.5)">'+v+'</b><s style="text-shadow:0 0 8px rgba('+c.g+',1)">%</s></div>' +
       '</div>' + burst +
     '</div>' +
     '<div class="corename" style="color:'+c.neon+';text-shadow:0 0 12px rgba('+c.g+',0.6)">'+c.name+'</div>' +
@@ -571,6 +584,16 @@ function render() {
   h += '</div></div>';
 
   h += '<div class="panel cores">' + CORES.map(coreHTML).join('') + '</div>';
+  if (state.tasks.length) {
+    var fc = forecast();
+    var parts = CORES.map(function(c){
+      var dlt = fc[c.id] - state.batteries[c.id];
+      var arrow = dlt > 0 ? ' <b style="color:#3DFFC5">+'+dlt+'</b>' : dlt < 0 ? ' <b style="color:#FF5C7A">'+dlt+'</b>' : '';
+      return '<span style="color:'+c.neon+';font-weight:800">'+fc[c.id]+'</span>'+arrow;
+    });
+    h += '<div style="text-align:center;font-size:12px;color:#5E6B8C;margin-top:10px">'+
+         'Если закрыть весь план, к вечеру: &nbsp;⚡ '+parts[0]+' &nbsp;·&nbsp; 🜂 '+parts[1]+' &nbsp;·&nbsp; ◎ '+parts[2]+'</div>';
+  }
 
   h += '<div class="panel quest" style="margin-top:12px">';
   h += '<span style="font-size:18px">🎯</span><div style="flex:1">';
