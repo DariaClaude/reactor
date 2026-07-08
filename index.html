@@ -340,6 +340,7 @@ var state = load();
 var ui = { showForm:false, title:"", effects:{energy:0,spirit:0,focus:0}, bursts:{} };
 handleNewDay();
 if (state.planDate !== today()) { buildPlan(); save(); }
+syncPull(true);
 
 
 function load() {
@@ -360,7 +361,11 @@ function load() {
   } catch(e) {}
   return def;
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e) {} }
+function save(push) {
+  state.savedAt = Date.now();
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e) {}
+  if (push !== false) syncPush();
+}
 
 function today() { return new Date().toLocaleDateString("ru-RU"); }
 function isYesterday(d) { if (!d) return false; var y = new Date(); y.setDate(y.getDate()-1);
@@ -495,6 +500,76 @@ function toast(text) {
   el.textContent = text;
   document.body.appendChild(el);
   setTimeout(function(){ el.remove(); }, 3100);
+}
+
+/* ── ОБЛАЧНАЯ СИНХРОНИЗАЦИЯ (приватный репозиторий GitHub) ── */
+var SYNC = { owner:"DariaClaude", repo:"reactor-data", path:"state.json", tokenKey:"reactor-sync-token" };
+var syncState = { status:"off", last:null, timer:null };
+function syncToken(){ try { return localStorage.getItem(SYNC.tokenKey) || ""; } catch(e){ return ""; } }
+function b64enc(str){ return btoa(unescape(encodeURIComponent(str))); }
+function b64dec(b){ return decodeURIComponent(escape(atob(b))); }
+function ghUrl(){ return "https://api.github.com/repos/"+SYNC.owner+"/"+SYNC.repo+"/contents/"+SYNC.path; }
+function ghHeaders(){ return { "Authorization": "Bearer " + syncToken(), "Accept": "application/vnd.github+json" }; }
+function syncTimeStr(){ return syncState.last ? syncState.last.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}) : ""; }
+
+function syncPull(silent) {
+  if (!syncToken()) return;
+  syncState.status = "sync";
+  fetch(ghUrl(), { headers: ghHeaders() })
+    .then(function(r){ if (r.status === 404) return null; if (!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(d){
+      if (d && d.content) {
+        try {
+          var remote = JSON.parse(b64dec(d.content.replace(/\n/g,"")));
+          if (remote && remote.batteries && (remote.savedAt || 0) > (state.savedAt || 0)) {
+            state = remote;
+            handleNewDay();
+            if (state.planDate !== today()) buildPlan();
+            save(false);
+            if (!silent) toast("☁️ Данные подтянуты с другого устройства");
+          }
+        } catch(e) {}
+      }
+      syncState.status = "ok"; syncState.last = new Date();
+      render();
+    })
+    .catch(function(){ syncState.status = "err"; render(); });
+}
+function syncPush() {
+  if (!syncToken()) return;
+  clearTimeout(syncState.timer);
+  syncState.timer = setTimeout(function(){
+    syncState.status = "sync";
+    fetch(ghUrl(), { headers: ghHeaders() })
+      .then(function(r){ return r.status === 404 ? { sha:null } : r.json(); })
+      .then(function(d){
+        var payload = { message: "sync " + new Date().toISOString(), content: b64enc(JSON.stringify(state)), branch: "main" };
+        if (d && d.sha) payload.sha = d.sha;
+        return fetch(ghUrl(), { method:"PUT",
+          headers: Object.assign({ "Content-Type":"application/json" }, ghHeaders()),
+          body: JSON.stringify(payload) });
+      })
+      .then(function(r){
+        syncState.status = r.ok ? "ok" : "err";
+        if (r.ok) syncState.last = new Date();
+        render();
+      })
+      .catch(function(){ syncState.status = "err"; render(); });
+  }, 2500);
+}
+function syncConnect() {
+  var t = window.prompt("Вставьте ключ синхронизации (github_pat_..., доступ только к reactor-data):");
+  if (!t || t.indexOf("github_pat_") !== 0) { if (t !== null) toast("Не похоже на ключ github_pat_..."); return; }
+  try { localStorage.setItem(SYNC.tokenKey, t.trim()); } catch(e) {}
+  toast("☁️ Подключаю синхронизацию…");
+  syncPull();
+  syncPush();
+}
+function syncDisconnect() {
+  try { localStorage.removeItem(SYNC.tokenKey); } catch(e) {}
+  syncState.status = "off"; syncState.last = null;
+  toast("Синхронизация отключена, данные остались на устройстве");
+  render();
 }
 
 /* ── вечерний чек-ин ── */
@@ -811,6 +886,25 @@ function render() {
       return '<div class="logline"><time>'+l.time+'</time><span>'+esc(l.text)+'</span></div>';
     }).join('');
   }
+
+  /* синхронизация */
+  h += '<div class="panel" style="margin-top:12px">';
+  var dotColor = syncState.status === "ok" ? "#3DFFC5" : syncState.status === "sync" ? "#FFB020" : syncState.status === "err" ? "#FF5C7A" : "#39435E";
+  h += '<div style="display:flex;align-items:center;gap:12px">' +
+    '<span style="width:10px;height:10px;border-radius:5px;background:'+dotColor+';box-shadow:0 0 8px '+dotColor+';flex-shrink:0"></span>' +
+    '<div style="flex:1"><div style="font-size:12px;font-weight:700;color:#C9D2E8">☁️ Синхронизация устройств</div>';
+  if (syncToken()) {
+    h += '<div style="font-size:11px;color:#5E6B8C">' +
+      (syncState.status === "err" ? "ошибка связи — проверьте ключ" :
+       syncState.status === "sync" ? "обмен данными…" :
+       "подключена · хранилище: reactor-data" + (syncTimeStr() ? " · " + syncTimeStr() : "")) + '</div></div>';
+    h += '<button class="preset" onclick="syncPull()">обновить</button>' +
+         '<button class="ghost" style="width:auto;padding:0 10px;font-size:11px" onclick="syncDisconnect()">откл.</button>';
+  } else {
+    h += '<div style="font-size:11px;color:#5E6B8C">общий прогресс на телефоне и компьютере</div></div>';
+    h += '<button class="preset" onclick="syncConnect()">подключить</button>';
+  }
+  h += '</div></div>';
 
   h += '<div class="footerbtns">' +
     '<button onclick="backup()">💾 Резервная копия</button>' +
