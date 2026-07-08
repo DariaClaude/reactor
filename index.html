@@ -143,11 +143,36 @@
   .stars { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
   .star { position: absolute; border-radius: 50%; opacity: .35; filter: blur(.5px);
           animation: starDrift linear infinite; }
+  .spark { position: absolute; bottom: -12px; border-radius: 50%;
+           animation-name: sparkRise, sparkTwinkle; animation-iteration-count: infinite;
+           animation-timing-function: linear, ease-in-out; }
+  .comet { position: absolute; width: 90px; height: 2px; border-radius: 2px;
+           opacity: 0; transform-origin: left center;
+           animation: cometShoot 9s ease-in infinite; }
   .low-pulse { animation: lowPulse 1.4s ease-in-out infinite; }
   @keyframes flowUp { from { background-position-y: 0; } to { background-position-y: -28px; } }
   @keyframes lowPulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
   @keyframes burstRing { from { transform: scale(.9); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
   @keyframes starDrift { from { transform: translateY(0); } to { transform: translateY(-140px); } }
+  @keyframes sparkRise {
+    0%   { transform: translate(0, 0); }
+    25%  { transform: translate(14px, -25vh); }
+    50%  { transform: translate(-10px, -50vh); }
+    75%  { transform: translate(12px, -75vh); }
+    100% { transform: translate(-6px, -105vh); }
+  }
+  @keyframes sparkTwinkle {
+    0%, 100% { opacity: 0; }
+    8%  { opacity: .9; }
+    45% { opacity: .35; }
+    70% { opacity: .8; }
+    92% { opacity: .1; }
+  }
+  @keyframes cometShoot {
+    0%, 88% { opacity: 0; transform: rotate(35deg) translateX(0); }
+    90% { opacity: .9; }
+    100% { opacity: 0; transform: rotate(35deg) translateX(70vw); }
+  }
   @keyframes lvlPop { 0% { transform: translate(-50%,-50%) scale(.6); opacity: 0; }
     15% { opacity: 1; } 70% { transform: translate(-50%,-50%) scale(1.05); opacity: 1; }
     100% { transform: translate(-50%,-50%) scale(1.15); opacity: 0; } }
@@ -677,19 +702,45 @@ function render() {
 }
 function submitTask(){ addTask(); }
 
-/* звёзды */
+/* звёзды, искры и кометы */
 (function(){
   var box = document.getElementById("stars");
   var colors = ["#FFB020","#3DFFC5","#7C6BFF"];
-  for (var i = 0; i < 24; i++) {
-    var s = document.createElement("span");
-    s.className = "star";
-    s.style.left = (i*41)%100 + "%";
-    s.style.top = (i*67)%100 + "%";
-    s.style.width = s.style.height = (i%3 ? 2 : 3) + "px";
-    s.style.background = colors[i%3];
-    s.style.animationDuration = (14 + (i%7)*3) + "s";
-    box.appendChild(s);
+  var glows  = ["255,176,32","61,255,197","124,107,255"];
+  for (var i = 0; i < 18; i++) {
+    var st = document.createElement("span");
+    st.className = "star";
+    st.style.left = (i*41)%100 + "%";
+    st.style.top = (i*67)%100 + "%";
+    st.style.width = st.style.height = (i%3 ? 2 : 3) + "px";
+    st.style.background = colors[i%3];
+    st.style.animationDuration = (14 + (i%7)*3) + "s";
+    box.appendChild(st);
+  }
+  /* искры-угольки: поднимаются, покачиваясь и мерцая */
+  for (var j = 0; j < 26; j++) {
+    var sp = document.createElement("span");
+    sp.className = "spark";
+    var sz = 2 + (j % 3);
+    sp.style.left = (j*37 + 11) % 100 + "%";
+    sp.style.width = sp.style.height = sz + "px";
+    sp.style.background = colors[j%3];
+    sp.style.boxShadow = "0 0 " + (4 + sz*2) + "px rgba(" + glows[j%3] + ",0.9)";
+    var dur = 9 + (j % 8) * 2;
+    sp.style.animationDuration = dur + "s, " + (2.2 + (j%5)*0.6) + "s";
+    sp.style.animationDelay = (j * 0.9) % dur + "s, 0s";
+    box.appendChild(sp);
+  }
+  /* редкие кометы */
+  for (var k = 0; k < 2; k++) {
+    var cm = document.createElement("span");
+    cm.className = "comet";
+    cm.style.left = (10 + k*45) + "%";
+    cm.style.top = (12 + k*20) + "%";
+    cm.style.background = "linear-gradient(90deg, " + colors[k+1] + ", transparent)";
+    cm.style.boxShadow = "0 0 8px rgba(" + glows[k+1] + ",0.8)";
+    cm.style.animationDelay = (k * 4.5) + "s";
+    box.appendChild(cm);
   }
 })();
 
