@@ -345,7 +345,15 @@ if (state.planDate !== today()) { buildPlan(); save(); }
 function load() {
   var def = { batteries:{energy:60,spirit:60,focus:60}, tasks:[], done:[], xp:0, log:[],
               streak:{count:0,lastDate:null}, combo:{count:0,date:null},
-              history:[], lastVisit:null, totalDone:0, ach:[], planDate:null };
+              history:[], lastVisit:null, totalDone:0, ach:[], planDate:null,
+              checkinDate:null, notes:[], spent:0,
+              rewards:[
+                {id:1, name:"Час с книгой без чувства вины", cost:40},
+                {id:2, name:"Серия любимого сериала", cost:60},
+                {id:3, name:"Долгая ванна со свечами", cost:80},
+                {id:4, name:"Ленивое утро в выходной", cost:150},
+                {id:5, name:"Внеплановый шопинг", cost:300}
+              ] };
   try {
     var raw = localStorage.getItem(KEY);
     if (raw) { var p = JSON.parse(raw); for (var k in def) if (!(k in p)) p[k] = def[k]; return p; }
@@ -489,6 +497,73 @@ function toast(text) {
   setTimeout(function(){ el.remove(); }, 3100);
 }
 
+/* ── вечерний чек-ин ── */
+function openCheckin() { ui.checkin = { energy: state.batteries.energy, spirit: state.batteries.spirit, focus: state.batteries.focus, note: "" }; render(); }
+function checkinSlide(id, v) { ui.checkin[id] = parseInt(v, 10); render(); }
+function saveCheckin() {
+  CORES.forEach(function(c){ state.batteries[c.id] = clamp(ui.checkin[c.id]); });
+  var note = (ui.checkin.note || "").trim();
+  if (note) { state.notes.unshift({ date: today(), text: note }); state.notes = state.notes.slice(0, 30); }
+  state.checkinDate = today();
+  state.xp += 5;
+  pushLog("🌙 Чек-ин: батареи откалиброваны по ощущениям (+5 ✦)");
+  ui.checkin = null;
+  toast("🌙 Чек-ин сохранён, +5 ✦ за честность");
+  checkAchs(); save(); render();
+}
+
+/* ── магазин наград ── */
+function sparkBalance() { return Math.max(0, state.xp - (state.spent || 0)); }
+function buyReward(id) {
+  var r = state.rewards.find(function(x){ return x.id === id; }); if (!r) return;
+  if (sparkBalance() < r.cost) { toast("Не хватает искр — реактор ещё не накопил"); return; }
+  state.spent = (state.spent || 0) + r.cost;
+  pushLog("🎁 Награда куплена: «" + r.name + "» (−" + r.cost + " ✦)");
+  toast("🎁 Заслужено: " + r.name + "!");
+  save(); render();
+}
+function addReward() {
+  var name = window.prompt("Название награды:"); if (!name || !name.trim()) return;
+  var cost = parseInt(window.prompt("Стоимость в искрах ✦ (например, 100):"), 10);
+  if (!cost || cost < 1) return;
+  state.rewards.push({ id: Date.now(), name: name.trim(), cost: cost });
+  save(); render();
+}
+function delReward(id) {
+  state.rewards = state.rewards.filter(function(r){ return r.id !== id; });
+  save(); render();
+}
+
+/* ── разбор недели ── */
+function weeklyInsights() {
+  if (state.history.length < 3) return null;
+  var out = [];
+  var last = state.history.slice(-7);
+  /* хронически слабая батарея */
+  var avg = { energy:0, spirit:0, focus:0 };
+  last.forEach(function(h){ CORES.forEach(function(c){ avg[c.id] += h[c.id]; }); });
+  CORES.forEach(function(c){ avg[c.id] = Math.round(avg[c.id] / last.length); });
+  var weakest = CORES.slice().sort(function(a,b){ return avg[a.id] - avg[b.id]; })[0];
+  var strongest = CORES.slice().sort(function(a,b){ return avg[b.id] - avg[a.id]; })[0];
+  out.push("Средний заряд: ⚡ " + avg.energy + " · 🜂 " + avg.spirit + " · ◎ " + avg.focus + ".");
+  out.push("Чаще всего проседает <b style=\"color:" + weakest.neon + "\">" + weakest.name + "</b> — планировщик уже подкидывает ей больше задач.");
+  out.push("Сильнее всего держится <b style=\"color:" + strongest.neon + "\">" + strongest.name + "</b>.");
+  /* лучший и худший день */
+  var scored = last.map(function(h){ return { d: h.date, v: h.energy + h.spirit + h.focus }; });
+  scored.sort(function(a,b){ return b.v - a.v; });
+  if (scored.length >= 2)
+    out.push("Самый заряженный день — " + scored[0].d + ", самый выжатый — " + scored[scored.length-1].d + ".");
+  /* самые заряжающие задачи из выполненных */
+  var gains = {};
+  state.done.forEach(function(t){
+    var plus = 0; for (var k in t.effects) if (t.effects[k] > 0) plus += t.effects[k];
+    if (plus > 0) gains[t.name] = (gains[t.name] || 0) + plus;
+  });
+  var top = Object.keys(gains).sort(function(a,b){ return gains[b] - gains[a]; }).slice(0, 3);
+  if (top.length) out.push("Ваши главные зарядные станции: " + top.map(function(n){ return "«" + n + "»"; }).join(", ") + ".");
+  return out;
+}
+
 /* ── резервная копия ── */
 function backup() {
   var data = JSON.stringify(state);
@@ -603,7 +678,7 @@ function render() {
   h += '<div class="statusrow">';
   h += '<span class="lvl">LVL '+lvl+' · '+rank.toUpperCase()+'</span>';
   h += '<span class="xpbar"><i style="width:'+prog+'%"></i></span>';
-  h += '<span class="xpnum">'+state.xp+' ✦</span>';
+  h += '<span class="xpnum">'+sparkBalance()+' ✦</span>';
   if (state.streak.count > 1) h += '<span class="streak">🔥 серия '+state.streak.count+' '+ruDays(state.streak.count)+'</span>';
   if (comboToday > 1) h += '<span class="combo">комбо ×'+mult.toFixed(1)+'</span>';
   h += '</div></div>';
@@ -678,7 +753,56 @@ function render() {
     h += '</div></div>';
   }
 
+  /* вечерний чек-ин */
+  if (state.checkinDate !== d) {
+    h += '<div class="panel" style="margin-top:12px">';
+    if (ui.checkin) {
+      h += '<h2>🌙 ВЕЧЕРНИЙ ЧЕК-ИН</h2><p class="empty" style="margin:8px 0 4px">Как день по ощущениям? Подвиньте — батареи откалибруются.</p>';
+      CORES.forEach(function(c){
+        h += '<div style="margin:10px 0 2px;display:flex;align-items:center;gap:10px">' +
+          '<span style="font-family:\'Unbounded\',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;color:'+c.neon+';min-width:64px">'+c.name+'</span>' +
+          '<input type="range" min="0" max="100" value="'+ui.checkin[c.id]+'" oninput="checkinSlide(\''+c.id+'\', this.value)" style="flex:1;accent-color:'+c.neon+'"/>' +
+          '<b style="min-width:30px;text-align:right;color:'+c.neon+'">'+ui.checkin[c.id]+'</b></div>';
+      });
+      h += '<input type="text" id="checkinNote" placeholder="Пара слов о дне (необязательно)" value="'+esc(ui.checkin.note||'')+'" style="width:100%;box-sizing:border-box;margin-top:12px;padding:10px 12px;border-radius:10px;border:1px solid rgba(124,107,255,0.35);font-size:16px;font-family:inherit;background:#0B1024;color:#E8ECF8"/>';
+      h += '<div style="display:flex;gap:8px;margin-top:12px"><button class="primary" onclick="saveCheckin()">СОХРАНИТЬ ЧЕК-ИН</button>' +
+           '<button class="ghost" style="width:auto;padding:0 14px" onclick="ui.checkin=null;render()">Позже</button></div>';
+    } else {
+      h += '<div style="display:flex;align-items:center;gap:12px"><span style="font-size:18px">🌙</span>' +
+        '<div style="flex:1"><div style="font-size:12px;font-weight:700;color:#C9D2E8">Вечерний чек-ин</div>' +
+        '<div style="font-size:11px;color:#5E6B8C">Откалибруйте батареи по реальным ощущениям (+5 ✦)</div></div>' +
+        '<button class="preset" onclick="openCheckin()">пройти</button></div>';
+    }
+    h += '</div>';
+  }
+
   h += '<div class="panel" style="margin-top:12px"><h2>НЕДЕЛЯ РЕАКТОРА</h2>' + chartHTML() + '</div>';
+
+  /* разбор недели */
+  var insights = weeklyInsights();
+  if (insights) {
+    h += '<div class="panel" style="margin-top:12px"><h2>РАЗБОР НЕДЕЛИ</h2><div style="margin-top:8px">';
+    insights.forEach(function(line){
+      h += '<p style="font-size:13px;color:#C9D2E8;line-height:1.55;margin:6px 0">• ' + line + '</p>';
+    });
+    h += '</div></div>';
+  }
+
+  /* магазин наград */
+  h += '<div class="panel" style="margin-top:12px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><h2>МАГАЗИН НАГРАД</h2>' +
+       '<span style="font-size:12px;color:#FFB020;font-weight:800">баланс: '+sparkBalance()+' ✦</span></div>';
+  state.rewards.forEach(function(r){
+    var can = sparkBalance() >= r.cost;
+    h += '<div class="task"><span style="font-size:16px">🎁</span>' +
+      '<div style="flex:1;font-size:13.5px;color:#E8ECF8">'+esc(r.name)+'</div>' +
+      '<span style="font-size:12px;font-weight:800;color:'+(can?'#FFB020':'#39435E')+'">'+r.cost+' ✦</span>' +
+      '<button class="preset" '+(can?'':'disabled style="opacity:.35;cursor:default" ')+'onclick="buyReward('+r.id+')">купить</button>' +
+      '<button class="ghost" onclick="delReward('+r.id+')" aria-label="Удалить награду">✕</button></div>';
+  });
+  h += '<button class="preset" style="margin-top:10px" onclick="addReward()">+ своя награда</button>';
+  h += '</div>';
+
   h += '<div class="panel" style="margin-top:12px"><h2>ДОСТИЖЕНИЯ</h2>' + achsHTML() + '</div>';
 
   if (state.log.length) {
@@ -699,6 +823,8 @@ function render() {
     inp.addEventListener("keydown", function(e){ if (e.key === "Enter") submitTask(); });
     if (ui.showForm && ui.focusForm) { inp.focus(); ui.focusForm = false; }
   }
+  var cn = document.getElementById("checkinNote");
+  if (cn) cn.addEventListener("input", function(){ ui.checkin.note = this.value; });
 }
 function submitTask(){ addTask(); }
 
