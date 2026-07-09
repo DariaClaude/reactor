@@ -191,6 +191,7 @@
 
 <script>
 "use strict";
+var APP_VERSION = "2.1";
 var KEY = "daria-energy-vessels";
 
 var CORES = [
@@ -355,13 +356,23 @@ function load() {
               ] };
   try {
     var raw = localStorage.getItem(KEY);
+    if (!raw) raw = localStorage.getItem(KEY + "-bak"); /* основная запись повреждена — берём копию */
     if (raw) { var p = JSON.parse(raw); for (var k in def) if (!(k in p)) p[k] = def[k]; return p; }
-  } catch(e) {}
+  } catch(e) {
+    try {
+      var bak = localStorage.getItem(KEY + "-bak");
+      if (bak) { var p2 = JSON.parse(bak); for (var k2 in def) if (!(k2 in p2)) p2[k2] = def[k2]; return p2; }
+    } catch(e2) {}
+  }
   return def;
 }
 function save(push) {
   state.savedAt = Date.now();
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e) {}
+  try {
+    var payload = JSON.stringify(state);
+    localStorage.setItem(KEY, payload);
+    localStorage.setItem(KEY + "-bak", payload);
+  } catch(e) {}
   if (push !== false) syncPush();
 }
 
@@ -575,6 +586,21 @@ function syncPush() {
     fetch(ghUrl(), { headers: ghHeaders() })
       .then(function(r){ return r.status === 404 ? { sha:null } : r.json(); })
       .then(function(d){
+        /* СТРАХОВКА: если в облаке данных заметно больше, чем на этом устройстве, —
+           не перезаписываем, а наоборот восстанавливаемся из облака */
+        var remote = null;
+        try { if (d && d.content) remote = JSON.parse(b64dec(d.content.replace(/\n/g,""))); } catch(e) {}
+        if (remote && remote.batteries) {
+          var cloudRicher = ((remote.xp || 0) > (state.xp || 0) + 50) ||
+                            ((remote.totalDone || 0) > (state.totalDone || 0) + 3);
+          if (cloudRicher) {
+            state = remote; save(false);
+            syncState.status = "ok"; syncState.last = new Date();
+            toast("☁️ В облаке данные полнее — восстановила их на это устройство");
+            render();
+            return null;
+          }
+        }
         var payload = { message: "sync " + new Date().toISOString(), content: b64enc(JSON.stringify(state)), branch: "main" };
         if (d && d.sha) payload.sha = d.sha;
         return fetch(ghUrl(), { method:"PUT",
@@ -582,6 +608,7 @@ function syncPush() {
           body: JSON.stringify(payload) });
       })
       .then(function(r){
+        if (r === null || r === undefined) return;
         if (!r.ok && !syncState.retried) {
           syncState.retried = true;
           syncPush(); /* конфликт одновременной записи — повторим со свежим sha */
@@ -944,7 +971,10 @@ function render() {
     h += '<button class="preset" onclick="syncPull()">обновить</button>' +
          '<button class="ghost" style="width:auto;padding:0 10px;font-size:11px" onclick="syncDisconnect()">откл.</button>';
   } else {
-    h += '<div style="font-size:11px;color:#5E6B8C">общий прогресс на телефоне и компьютере</div></div>';
+    var freshHint = (state.xp === 0 && state.totalDone === 0)
+      ? 'уже пользовались Реактором? Подключите — и всё вернётся из облака'
+      : 'общий прогресс на телефоне и компьютере';
+    h += '<div style="font-size:11px;color:' + (state.xp === 0 && state.totalDone === 0 ? '#FFB020' : '#5E6B8C') + '">' + freshHint + '</div></div>';
     h += '<button class="preset" onclick="syncConnect()">подключить</button>';
   }
   h += '</div></div>';
@@ -952,6 +982,7 @@ function render() {
   h += '<div class="footerbtns">' +
     '<button onclick="backup()">💾 Резервная копия</button>' +
     '<button onclick="restore()">↩ Восстановить</button></div>';
+  h += '<div style="text-align:center;font-size:10px;color:#39435E;margin-top:10px">Реактор v' + APP_VERSION + '</div>';
 
   document.getElementById("app").innerHTML = h;
   var inp = document.getElementById("taskTitle");
@@ -1008,6 +1039,10 @@ function submitTask(){ addTask(); }
 })();
 
 /* ── ЗАПУСК ── */
+window.addEventListener("error", function(ev){
+  try { toast("⚠️ Сбой: " + String(ev.message || "").slice(0, 70)); } catch(e) {}
+});
+
 var state = load();
 var ui = { showForm:false, title:"", effects:{energy:0,spirit:0,focus:0}, bursts:{} };
 function dayTick() {
