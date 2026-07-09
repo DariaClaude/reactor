@@ -345,12 +345,27 @@ handleNewDay();
 if (state.planDate !== today()) { buildPlan(); save(); }
 syncPull(true);
 
+/* пробуждение из памяти телефона: проверяем смену дня и обновляем экран */
+function wakeUp() {
+  if (state.lastVisit !== today()) {
+    handleNewDay();
+    if (state.planDate !== today()) buildPlan();
+    save();
+  }
+  if (!ui.showForm && !ui.checkin) render();
+  syncPull(true);
+}
+document.addEventListener("visibilitychange", function(){
+  if (document.visibilityState === "visible") wakeUp();
+});
+window.addEventListener("focus", wakeUp);
+
 
 function load() {
   var def = { batteries:{energy:60,spirit:60,focus:60}, tasks:[], done:[], xp:0, log:[],
               streak:{count:0,lastDate:null}, combo:{count:0,date:null},
               history:[], lastVisit:null, totalDone:0, ach:[], planDate:null,
-              checkinDate:null, notes:[], spent:0,
+              checkinDate:null, notes:[], spent:0, myTasks:[],
               rewards:[
                 {id:1, name:"Час с книгой без чувства вины", cost:40},
                 {id:2, name:"Серия любимого сериала", cost:60},
@@ -420,13 +435,34 @@ function adjust(id, d) {
 function addTask() {
   var name = ui.title.trim(); if (!name) return;
   var hasEff = CORES.some(function(c){ return ui.effects[c.id] !== 0; });
-  state.tasks.push({ id: Date.now(), name: name,
-    effects: hasEff ? Object.assign({}, ui.effects) : {energy:10,spirit:0,focus:0} });
+  var eff = hasEff ? Object.assign({}, ui.effects) : {energy:10,spirit:0,focus:0};
+  state.tasks.push({ id: Date.now(), name: name, effects: eff });
+  rememberTask(name, eff);
   ui.title = ""; ui.effects = {energy:0,spirit:0,focus:0}; ui.showForm = false;
   save(); render();
 }
+/* свои задачи запоминаются и появляются во вкладке «Мои» */
+function rememberTask(name, eff) {
+  var isPreset = PRESET_CATS.some(function(c){
+    return c.items.some(function(i){ return i.name === name; });
+  });
+  if (isPreset) return;
+  state.myTasks = (state.myTasks || []).filter(function(t){ return t.name !== name; });
+  state.myTasks.unshift({ name: name, e: Object.assign({}, eff) });
+  state.myTasks = state.myTasks.slice(0, 30);
+}
+function delMyTask(i) {
+  state.myTasks.splice(i, 1);
+  save(); render();
+}
+function allCats() {
+  var cats = [];
+  if (state.myTasks && state.myTasks.length)
+    cats.push({ id:"mine", name:"⭐ Мои", items: state.myTasks });
+  return cats.concat(PRESET_CATS);
+}
 function usePreset(cat, i) {
-  var p = PRESET_CATS[cat].items[i];
+  var p = allCats()[cat].items[i];
   ui.title = p.name;
   ui.effects = Object.assign({}, p.e);
   render();
@@ -793,11 +829,16 @@ function render() {
   if (ui.showForm) {
     h += '<div class="form">';
     h += '<input type="text" id="taskTitle" placeholder="Например: тренировка / сложные переговоры" value="'+esc(ui.title)+'"/>';
-    h += '<div class="ptabs">'+PRESET_CATS.map(function(c,i){
-      return '<button class="ptab'+((ui.presetCat||0)===i?' on':'')+'" onclick="setPresetCat('+i+')">'+c.name+'</button>';
+    var cats = allCats();
+    var pc = Math.min(ui.presetCat || 0, cats.length - 1);
+    h += '<div class="ptabs">'+cats.map(function(c,i){
+      return '<button class="ptab'+(pc===i?' on':'')+'" onclick="setPresetCat('+i+')">'+c.name+'</button>';
     }).join('')+'</div>';
-    h += '<div class="presets">'+PRESET_CATS[ui.presetCat||0].items.map(function(p,i){
-      return '<button class="preset" onclick="usePreset('+(ui.presetCat||0)+','+i+')">'+p.name+'</button>';
+    h += '<div class="presets">'+cats[pc].items.map(function(p,i){
+      var del = cats[pc].id === "mine"
+        ? ' <span onclick="event.stopPropagation();delMyTask('+i+')" style="opacity:.5;padding-left:4px" role="button" aria-label="Забыть задачу">✕</span>'
+        : '';
+      return '<button class="preset" onclick="usePreset('+pc+','+i+')">'+esc(p.name)+del+'</button>';
     }).join('')+'</div>';
     h += '<div class="hintline">Эффект на батареи — плюс заряжает, минус сжигает:</div>';
     h += '<div class="steppers">'+CORES.map(function(c){
