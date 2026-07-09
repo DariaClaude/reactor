@@ -449,11 +449,23 @@ function delMyTask(i) {
   state.myTasks.splice(i, 1);
   save(); render();
 }
+function categoryFor(eff) {
+  var best = null, bestV = 0;
+  ["energy","spirit","focus"].forEach(function(k){
+    if ((eff[k] || 0) > bestV) { bestV = eff[k]; best = k; }
+  });
+  if (best === "energy") return "body";
+  if (best === "spirit") return "spirit";
+  if (best === "focus") return "focus";
+  return "drain";
+}
 function allCats() {
-  var cats = [];
-  if (state.myTasks && state.myTasks.length)
-    cats.push({ id:"mine", name:"⭐ Мои", items: state.myTasks });
-  return cats.concat(PRESET_CATS);
+  return PRESET_CATS.map(function(c){
+    var mine = (state.myTasks || []).map(function(t, idx){
+      return { name: t.name, e: t.e, mine: true, idx: idx };
+    }).filter(function(t){ return categoryFor(t.e) === c.id; });
+    return { id: c.id, name: c.name, items: mine.concat(c.items) };
+  });
 }
 function usePreset(cat, i) {
   var p = allCats()[cat].items[i];
@@ -829,8 +841,8 @@ function render() {
       return '<button class="ptab'+(pc===i?' on':'')+'" onclick="setPresetCat('+i+')">'+c.name+'</button>';
     }).join('')+'</div>';
     h += '<div class="presets">'+cats[pc].items.map(function(p,i){
-      var del = cats[pc].id === "mine"
-        ? ' <span onclick="event.stopPropagation();delMyTask('+i+')" style="opacity:.5;padding-left:4px" role="button" aria-label="Забыть задачу">✕</span>'
+      var del = p.mine
+        ? ' <span onclick="event.stopPropagation();delMyTask('+p.idx+')" style="opacity:.5;padding-left:4px" role="button" aria-label="Забыть задачу">✕</span>'
         : '';
       return '<button class="preset" onclick="usePreset('+pc+','+i+')">'+esc(p.name)+del+'</button>';
     }).join('')+'</div>';
