@@ -333,26 +333,6 @@ function buildPlan() {
   state.planDate = today();
 }
 
-var state = load();
-var ui = { showForm:false, title:"", effects:{energy:0,spirit:0,focus:0}, bursts:{} };
-handleNewDay();
-if (state.planDate !== today()) { buildPlan(); save(); }
-syncPull(true);
-
-/* пробуждение из памяти телефона: проверяем смену дня и обновляем экран */
-function wakeUp() {
-  if (state.lastVisit !== today()) {
-    handleNewDay();
-    if (state.planDate !== today()) buildPlan();
-    save();
-  }
-  if (!ui.showForm && !ui.checkin) render();
-  syncPull(true);
-}
-document.addEventListener("visibilitychange", function(){
-  if (document.visibilityState === "visible") wakeUp();
-});
-window.addEventListener("focus", wakeUp);
 
 
 function load() {
@@ -557,8 +537,8 @@ function ghUrl(){ return "https://api.github.com/repos/"+SYNC.owner+"/"+SYNC.rep
 function ghHeaders(){ return { "Authorization": "Bearer " + syncToken(), "Accept": "application/vnd.github+json" }; }
 function syncTimeStr(){ return syncState.last ? syncState.last.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}) : ""; }
 
-function syncPull(silent) {
-  if (!syncToken()) return;
+function syncPull(silent, cb) {
+  if (!syncToken()) { if (cb) cb(); return; }
   syncState.status = "sync";
   fetch(ghUrl(), { headers: ghHeaders() })
     .then(function(r){ if (r.status === 404) return null; if (!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
@@ -568,8 +548,6 @@ function syncPull(silent) {
           var remote = JSON.parse(b64dec(d.content.replace(/\n/g,"")));
           if (remote && remote.batteries && (remote.savedAt || 0) > (state.savedAt || 0)) {
             state = remote;
-            handleNewDay();
-            if (state.planDate !== today()) buildPlan();
             save(false);
             if (!silent) toast("☁️ Данные подтянуты с другого устройства");
           }
@@ -577,8 +555,9 @@ function syncPull(silent) {
       }
       syncState.status = "ok"; syncState.last = new Date();
       render();
+      if (cb) cb();
     })
-    .catch(function(){ syncState.status = "err"; render(); });
+    .catch(function(){ syncState.status = "err"; render(); if (cb) cb(); });
 }
 function syncPush() {
   if (!syncToken()) return;
@@ -595,6 +574,12 @@ function syncPush() {
           body: JSON.stringify(payload) });
       })
       .then(function(r){
+        if (!r.ok && !syncState.retried) {
+          syncState.retried = true;
+          syncPush(); /* конфликт одновременной записи — повторим со свежим sha */
+          return;
+        }
+        syncState.retried = false;
         syncState.status = r.ok ? "ok" : "err";
         if (r.ok) syncState.last = new Date();
         render();
@@ -1014,8 +999,28 @@ function submitTask(){ addTask(); }
   }
 })();
 
+/* ── ЗАПУСК ── */
+var state = load();
+var ui = { showForm:false, title:"", effects:{energy:0,spirit:0,focus:0}, bursts:{} };
+function dayTick() {
+  var changed = false;
+  if (state.lastVisit !== today()) { handleNewDay(); changed = true; }
+  if (state.planDate !== today()) { buildPlan(); changed = true; }
+  if (changed) save();
+  if (!ui.showForm && !ui.checkin) render();
+}
+
+/* пробуждение из памяти телефона: проверяем смену дня и обновляем экран */
+function wakeUp() {
+  }
+document.addEventListener("visibilitychange", function(){
+  if (document.visibilityState === "visible") wakeUp();
+});
+window.addEventListener("focus", wakeUp);
+
 checkAchs();
 render();
+syncPull(true, dayTick);
 </script>
 </body>
 </html>
