@@ -426,6 +426,8 @@ function rememberTask(name, eff) {
   var isPreset = PRESET_CATS.some(function(c){
     return c.items.some(function(i){ return i.name === name; });
   });
+  /* служебные события планировщика в библиотеку не попадают */
+  if (name === 'Оперсовет 11:00–13:00' || name === 'Директорский день 14:00') return;
   if (isPreset) return;
   state.myTasks = (state.myTasks || []).filter(function(t){ return t.name !== name; });
   state.myTasks.unshift({ name: name, e: Object.assign({}, eff) });
