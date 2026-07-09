@@ -191,7 +191,7 @@
 
 <script>
 "use strict";
-var APP_VERSION = "2.1";
+var APP_VERSION = "2.2";
 var KEY = "sofia-energy-vessels";
 
 var CORES = [
@@ -439,6 +439,13 @@ function rememberTask(name, eff) {
 function delMyTask(i) {
   state.myTasks.splice(i, 1);
   save(); render();
+}
+function dominantColor(eff) {
+  var cat = categoryFor(eff);
+  if (cat === "body") return CORES[0];
+  if (cat === "spirit") return CORES[1];
+  if (cat === "focus") return CORES[2];
+  return { neon: "#5E6B8C", g: "94,107,140" };
 }
 function categoryFor(eff) {
   var best = null, bestV = 0;
@@ -838,8 +845,13 @@ function render() {
   h += '<h2>ЗАДАЧИ</h2><span><button class="preset" onclick="buildPlan();save();render()">⟳ собрать день</button></span></div>';
   if (!state.tasks.length && !ui.showForm)
     h += '<p class="empty">Реактору нужно топливо. Добавьте задачу — или возьмите готовую из шаблонов.</p>';
-  h += state.tasks.map(function(t){
-    return '<div class="task">' +
+  var CAT_ORDER = { body: 1, spirit: 2, focus: 3, drain: 4 };
+  var sortedTasks = state.tasks.slice().sort(function(a, b){
+    return (CAT_ORDER[categoryFor(a.effects)] || 9) - (CAT_ORDER[categoryFor(b.effects)] || 9);
+  });
+  h += sortedTasks.map(function(t){
+    var dc = dominantColor(t.effects);
+    return '<div class="task" style="border-left:2px solid rgba('+dc.g+',0.55);padding-left:10px">' +
       '<button class="check" onclick="completeTask('+t.id+')" aria-label="Выполнить">⚡</button>' +
       '<div style="flex:1;min-width:0"><div class="tname">'+esc(t.name)+'</div><div class="badges">'+badgeHTML(t)+'</div></div>' +
       '<button class="ghost" onclick="removeTask('+t.id+')" aria-label="Удалить">✕</button></div>';
@@ -850,7 +862,7 @@ function render() {
     var cats = allCats();
     var pc = Math.min(ui.presetCat || 0, cats.length - 1);
     h += '<div class="ptabs">'+cats.map(function(c,i){
-      return '<button class="ptab'+(pc===i?' on':'')+'" onclick="setPresetCat('+i+')">'+c.name+'</button>';
+      return '<button class="ptab'+(pc===i?' on':'')+'" onclick="setPresetCat('+i+')">'+c.name+' <i style="font-style:normal;opacity:.55">'+c.items.length+'</i></button>';
     }).join('')+'</div>';
     h += '<div class="presets">'+cats[pc].items.map(function(p,i){
       var del = p.mine
