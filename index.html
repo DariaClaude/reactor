@@ -191,7 +191,7 @@
 
 <script>
 "use strict";
-var APP_VERSION = "2.2";
+var APP_VERSION = "2.3";
 var KEY = "daria-energy-vessels";
 
 var CORES = [
@@ -567,7 +567,13 @@ function syncPull(silent, cb) {
   if (!syncToken()) { if (cb) cb(); return; }
   syncState.status = "sync";
   fetch(ghUrl(), { headers: ghHeaders() })
-    .then(function(r){ if (r.status === 404) return null; if (!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    .then(function(r){
+      if (r.status === 404) return null;
+      if (r.status === 401 || r.status === 403) { syncState.badKey = true; throw new Error("HTTP "+r.status); }
+      if (!r.ok) throw new Error("HTTP "+r.status);
+      syncState.badKey = false;
+      return r.json();
+    })
     .then(function(d){
       if (d && d.content) {
         try {
@@ -977,7 +983,7 @@ function render() {
     '<div style="flex:1"><div style="font-size:12px;font-weight:700;color:#C9D2E8">☁️ Синхронизация устройств</div>';
   if (syncToken()) {
     h += '<div style="font-size:11px;color:#5E6B8C">' +
-      (syncState.status === "err" ? "ошибка связи — проверьте ключ" :
+      (syncState.status === "err" ? (syncState.badKey ? "ключ не подошёл или отозван — перевыпустите и подключите заново" : "нет связи с облаком — проверьте интернет") :
        syncState.status === "sync" ? "обмен данными…" :
        "подключена · хранилище: reactor-data" + (syncTimeStr() ? " · " + syncTimeStr() : "")) + '</div></div>';
     h += '<button class="preset" onclick="syncPull()">обновить</button>' +
@@ -1051,6 +1057,10 @@ function submitTask(){ addTask(); }
 })();
 
 /* ── ЗАПУСК ── */
+window.addEventListener("error", function(ev){
+  try { toast("⚠️ Сбой: " + String(ev.message || "").slice(0, 70)); } catch(e) {}
+});
+
 window.addEventListener("error", function(ev){
   try { toast("⚠️ Сбой: " + String(ev.message || "").slice(0, 70)); } catch(e) {}
 });
