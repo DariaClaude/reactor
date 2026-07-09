@@ -337,6 +337,18 @@ var state = load();
 var ui = { showForm:false, title:"", effects:{energy:0,spirit:0,focus:0}, bursts:{} };
 handleNewDay();
 if (state.planDate !== today()) { buildPlan(); save(); }
+/* разовая миграция: вспоминаем свои задачи из истории */
+if (!state.migratedDone) {
+  (state.done || []).slice().reverse().forEach(function(t){
+    if (t && t.name && t.effects) rememberTask(t.name, t.effects);
+  });
+  (state.tasks || []).forEach(function(t){
+    if (t && t.name && t.effects) rememberTask(t.name, t.effects);
+  });
+  state.migratedDone = true;
+  save(false);
+}
+
 syncPull(true);
 
 /* пробуждение из памяти телефона: проверяем смену дня и обновляем экран */
