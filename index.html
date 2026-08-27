@@ -191,7 +191,7 @@
 
 <script>
 "use strict";
-var APP_VERSION = "2.3";
+var APP_VERSION = "2.4";
 var KEY = "daria-energy-vessels";
 
 var CORES = [
@@ -301,7 +301,7 @@ function buildPlan() {
   function push(name, e) {
     if (names[name]) return false;
     names[name] = 1; added++;
-    state.tasks.push({ id: Date.now() + Math.floor(Math.random()*100000), name: name, effects: Object.assign({}, e) });
+    state.tasks.push({ id: Date.now() + Math.floor(Math.random()*100000), name: name, effects: Object.assign({}, e), src:"auto" });
     return true;
   }
   /* фиксированные события по расписанию Дарьи */
@@ -314,30 +314,119 @@ function buildPlan() {
   }
   /* утренние ритуалы */
   PLANNER.rituals.forEach(function(r){ if (!weekend || r.weekend) push(r.name, r.e); });
-  /* умный добор: приоритет — самая разряженная батарея; в выходные без рабочего фокуса */
-  var catOf = { energy:"body", spirit:"spirit", focus:"focus" };
-  function pickFrom(catId) {
+  /* умный добор: под самую нуждающуюся сферу, с опорой на то, что делается обычно */
+  function pickFrom(catId) {   /* запасной путь: случайная задача из категории */
     var cat = PRESET_CATS.find(function(c){ return c.id === catId; });
-    var pool = cat.items.filter(function(i){ return !names[i.name]; });
+    var pool = cat ? cat.items.filter(function(i){ return !names[i.name]; }) : [];
     if (!pool.length) return false;
     var p = pool[Math.floor(Math.random() * pool.length)];
     return push(p.name, p.e);
   }
+  var needs = coreNeeds();
+  var catUsed = {}, chosen = [];
+  state.tasks.forEach(function(t){
+    var c = categoryFor(t.effects); catUsed[c] = (catUsed[c] || 0) + 1;
+  });
   var guard = 0;
-  while (state.tasks.length < target && guard++ < 20) {
-    var order = CORES.slice().sort(function(a,b){ return state.batteries[a.id] - state.batteries[b.id]; });
-    var ok = false;
-    for (var i = 0; i < order.length && !ok; i++) {
-      var catId = catOf[order[i].id];
-      if (weekend && catId === "focus") ok = pickFrom("home") || pickFrom("spirit");
-      else ok = pickFrom(catId);
+  while (state.tasks.length < target && guard++ < 30) {
+    var lastSlot = state.tasks.length === target - 1;   /* последний слот — для свежего */
+    var placed = false;
+    for (var i = 0; i < needs.length && !placed; i++) {
+      var pool = poolFor(needs[i].core.id, weekend, names, lastSlot);
+      var cand = null;
+      for (var j = 0; j < pool.length && !cand; j++)
+        if ((catUsed[pool[j].cat] || 0) < 2) cand = pool[j];
+      if (!cand && pool.length) cand = pool[0];
+      if (!cand) continue;
+      if (push(cand.name, cand.e)) {
+        catUsed[cand.cat] = (catUsed[cand.cat] || 0) + 1;
+        chosen.push({ name: cand.name, core: needs[i].core, habit: cand.habit, ago: cand.ago });
+        placed = true;
+      }
     }
-    if (!ok) break;
+    if (!placed) break;
   }
   /* в плане всегда есть что-то для Духа */
   if (!state.tasks.some(function(t){ return t.effects.spirit >= 10; })) pickFrom("spirit");
-  if (added) pushLog("План дня собран автоматически: +" + added);
+  if (added) {
+    var weak = needs.filter(function(x){ return x.need >= 25; })
+                    .map(function(x){ return x.core.name + " " + x.v + "%"; });
+    pushLog(weak.length
+      ? "Просело: " + weak.join(", ") + " — под них и собран план"
+      : "Все батареи в норме — план на поддержание");
+    if (chosen.length) pushLog("Добавлено: " + chosen.map(function(x){
+      return x.name + (x.habit >= 3 ? " (делаете обычно)" : x.ago >= 10 ? " (давно не было)" : "");
+    }).join(", "));
+  }
   state.planDate = today();
+}
+
+/* ── чем и под что добирать план ── */
+function daysAgoDone(name) {
+  var d = today(), best = 99;
+  state.done.forEach(function(t){
+    if (t.name !== name || !t.doneAt) return;
+    var diff = daysBetween(t.doneAt, d);
+    if (diff >= 0 && diff < best) best = diff;
+  });
+  return best;
+}
+function habitCount(name, days) {
+  var d = today(), n = 0;
+  state.done.forEach(function(t){
+    if (t.name !== name || !t.doneAt) return;
+    var diff = daysBetween(t.doneAt, d);
+    if (diff >= 0 && diff < days) n++;
+  });
+  return n;
+}
+function skipCount(name, days) {
+  var d = today(), n = 0;
+  (state.skipped || []).forEach(function(x){
+    if (x.name !== name || !x.date) return;
+    var diff = daysBetween(x.date, d);
+    if (diff >= 0 && diff < days) n++;
+  });
+  return n;
+}
+/* сферы по нужде: ниже заряд, хуже недельный тренд и меньше подпитки — выше приоритет */
+function coreNeeds() {
+  var hist = state.history.slice(-7), d = today();
+  return CORES.map(function(c){
+    var v = state.batteries[c.id];
+    var trend = v - (hist.length ? hist[0][c.id] : v);
+    var week = 0;
+    state.done.forEach(function(t){
+      if (!t.doneAt) return;
+      var diff = daysBetween(t.doneAt, d);
+      if (diff >= 0 && diff < 7 && (t.effects[c.id] || 0) > 0) week += t.effects[c.id];
+    });
+    return { core:c, v:v, trend:trend, week:week,
+             need: (100 - v) + Math.max(0, -trend) * 0.6 + Math.max(0, 30 - week) * 0.4 };
+  }).sort(function(a,b){ return b.need - a.need; });
+}
+/* кандидаты под сферу: свои задачи и шаблоны, отранжированные по пользе */
+function poolFor(coreId, weekend, names, freshBias) {
+  var out = [];
+  function add(name, e, mine) {
+    if (names[name] || (e[coreId] || 0) <= 0) return;
+    var cat = categoryFor(e);
+    if (weekend && cat === "focus") return;          /* в выходные без рабочего фокуса */
+    var harm = 0;                                     /* не жечь батарею, которая и так низкая */
+    CORES.forEach(function(o){
+      if (o.id === coreId || (e[o.id] || 0) >= 0) return;
+      var lvl = state.batteries[o.id];
+      harm += -e[o.id] * (lvl < 50 ? 1.2 : lvl < 70 ? 0.6 : 0.3);
+    });
+    var habit = habitCount(name, 14), ago = daysAgoDone(name);
+    var w = e[coreId] - harm - skipCount(name, 7) * 6 + (mine ? 5 : 0);
+    if (freshBias) w += (ago >= 10 ? 10 : 0) - Math.min(habit, 4) * 2;   /* слот на разнообразие */
+    else w += Math.min(habit, 5) * 6;                                     /* привычное — в приоритете */
+    out.push({ name:name, e:e, cat:cat, habit:habit, ago:ago, w:w });
+  }
+  (state.myTasks || []).forEach(function(t){ add(t.name, t.e, true); });
+  PRESET_CATS.forEach(function(c){ c.items.forEach(function(i){ add(i.name, i.e, false); }); });
+  return out.sort(function(a,b){ return b.w - a.w; });
 }
 
 
@@ -346,7 +435,7 @@ function load() {
   var def = { batteries:{energy:60,spirit:60,focus:60}, tasks:[], done:[], xp:0, log:[],
               streak:{count:0,lastDate:null}, combo:{count:0,date:null},
               history:[], lastVisit:null, totalDone:0, ach:[], planDate:null,
-              checkinDate:null, notes:[], spent:0, myTasks:[],
+              checkinDate:null, notes:[], spent:0, myTasks:[], skipped:[],
               rewards:[
                 {id:1, name:"Час с книгой без чувства вины", cost:40},
                 {id:2, name:"Серия любимого сериала", cost:60},
@@ -390,10 +479,33 @@ function pushLog(text) {
   state.log.unshift({ time: new Date().toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"}), text: text });
   state.log = state.log.slice(0, 12);
 }
-function ruDays(n){ var m10=n%10, m100=n%100;
-  if (m10===1 && m100!==11) return "день";
-  if (m10>=2 && m10<=4 && (m100<10||m100>=20)) return "дня";
-  return "дней"; }
+function ruWord(n, one, few, many){ var m10=n%10, m100=n%100;
+  if (m10===1 && m100!==11) return one;
+  if (m10>=2 && m10<=4 && (m100<10||m100>=20)) return few;
+  return many; }
+function ruDays(n){ return ruWord(n, "день", "дня", "дней"); }
+
+/* своя задача (рабочая, вписанная руками) — переносим; подкинутую планировщиком — списываем */
+function isOwnTask(t) {
+  if (t.src === "manual") return true;
+  if (t.src === "auto") return false;
+  return (state.myTasks || []).some(function(m){ return m.name === t.name; });  /* задачи без пометки */
+}
+function expireTasks(dateKey) {
+  if (!state.tasks.length) return;
+  state.skipped = state.skipped || [];
+  var keep = [], dropped = 0;
+  state.tasks.forEach(function(t){
+    if (isOwnTask(t)) { keep.push(t); return; }
+    state.skipped.unshift({ name:t.name, effects:t.effects, date:dateKey });
+    dropped++;
+  });
+  state.skipped = state.skipped.slice(0, 80);
+  state.tasks = keep;
+  if (dropped) pushLog("Не израсходовано за " + dateKey + ": " + dropped + " " +
+          ruWord(dropped, "задача списана", "задачи списаны", "задач списано"));
+  if (keep.length) pushLog("Ваши задачи перенесены на сегодня: " + keep.length);
+}
 
 /* ── новый день: снимок в историю + ночной саморазряд ── */
 function handleNewDay() {
@@ -405,6 +517,7 @@ function handleNewDay() {
     energy: state.batteries.energy, spirit: state.batteries.spirit, focus: state.batteries.focus
   });
   state.history = state.history.slice(-14);
+  expireTasks(state.lastVisit);
   var missed = Math.min(daysBetween(state.lastVisit, d), 3);
   if (missed > 0) {
     var drain = 8 * missed;
@@ -427,7 +540,7 @@ function addTask() {
   var name = ui.title.trim(); if (!name) return;
   var hasEff = CORES.some(function(c){ return ui.effects[c.id] !== 0; });
   var eff = hasEff ? Object.assign({}, ui.effects) : {energy:10,spirit:0,focus:0};
-  state.tasks.push({ id: Date.now(), name: name, effects: eff });
+  state.tasks.push({ id: Date.now(), name: name, effects: eff, src:"manual" });
   rememberTask(name, eff);
   ui.title = ""; ui.effects = {energy:0,spirit:0,focus:0}; ui.showForm = false;
   save(); render();
@@ -500,7 +613,7 @@ function completeTask(id) {
   state.totalDone += 1;
   state.tasks = state.tasks.filter(function(x){return x.id!==id;});
   state.done.unshift({ id:t.id, name:t.name, effects:t.effects, doneAt:d, gained:gained });
-  state.done = state.done.slice(0, 30);
+  state.done = state.done.slice(0, 150);   /* глубина истории: на ней считается «что делаю обычно» */
   pushLog("«" + t.name + "» → +" + gained + " ✦" + (combo > 1 ? " (комбо ×" + mult.toFixed(1) + ")" : ""));
   checkAchs(); save(); render();
 }
@@ -517,7 +630,7 @@ function undoTask(id) {
 }
 function repeatTask(id) {
   var t = state.done.find(function(x){return x.id===id;}); if (!t) return;
-  state.tasks.push({ id: Date.now(), name: t.name, effects: Object.assign({}, t.effects) });
+  state.tasks.push({ id: Date.now(), name: t.name, effects: Object.assign({}, t.effects), src: t.src || "manual" });
   pushLog("В план снова: «" + t.name + "»");
   save(); render();
 }
