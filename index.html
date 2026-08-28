@@ -191,7 +191,7 @@
 
 <script>
 "use strict";
-var APP_VERSION = "2.4";
+var APP_VERSION = "2.5";
 var KEY = "daria-energy-vessels";
 
 var CORES = [
@@ -280,13 +280,17 @@ var ACHS = [
 ];
 
 /* ── АВТОПЛАНИРОВЩИК ── */
+var PLAN_V = 2;       // меняется вместе с составом рутины: план пересобирается в тот же день
 var PLANNER = {
-  size: 5,            // будни: компактный план
-  weekendSize: 4,     // выходные: легче
+  size: 9,            // будни: рутина (5) + 4 задачи под просевшие сферы
+  weekendSize: 7,     // выходные: рутина (4) + 3 задачи
   anchor: [2026, 6, 8], // 08.07.2026 — точка отсчёта директорских дней (раз в 2 недели, среда)
-  rituals: [
-    { name:"Зарядка утром",     e:{energy:10,spirit:0,focus:5},  weekend:true  },
-    { name:"Планирование дня",  e:{energy:0, spirit:0,focus:10}, weekend:false }
+  rituals: [   /* утренняя рутина — попадает в план всегда, до умного добора */
+    { name:"Стакан воды",       e:{energy:5, spirit:0, focus:0},  weekend:true  },
+    { name:"Контрастный душ",   e:{energy:10,spirit:0, focus:0},  weekend:true  },
+    { name:"Зарядка утром",     e:{energy:10,spirit:0, focus:5},  weekend:true  },
+    { name:"Массаж",            e:{energy:10,spirit:10,focus:0},  weekend:true, blocks:"Массаж / баня" },
+    { name:"Планирование дня",  e:{energy:0, spirit:0, focus:10}, weekend:false }
   ]
 };
 function stripTime(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
@@ -313,7 +317,11 @@ function buildPlan() {
       push("Директорский день 14:00", {energy:-15,spirit:5,focus:10});
   }
   /* утренние ритуалы */
-  PLANNER.rituals.forEach(function(r){ if (!weekend || r.weekend) push(r.name, r.e); });
+  PLANNER.rituals.forEach(function(r){
+    if (weekend && !r.weekend) return;
+    push(r.name, r.e);
+    if (r.blocks) names[r.blocks] = 1;   /* похожий пункт библиотеки в этот день не предлагаем */
+  });
   /* умный добор: под самую нуждающуюся сферу, с опорой на то, что делается обычно */
   function pickFrom(catId) {   /* запасной путь: случайная задача из категории */
     var cat = PRESET_CATS.find(function(c){ return c.id === catId; });
@@ -359,6 +367,7 @@ function buildPlan() {
     }).join(", "));
   }
   state.planDate = today();
+  state.planV = PLAN_V;
 }
 
 /* ── чем и под что добирать план ── */
@@ -434,7 +443,7 @@ function poolFor(coreId, weekend, names, freshBias) {
 function load() {
   var def = { batteries:{energy:60,spirit:60,focus:60}, tasks:[], done:[], xp:0, log:[],
               streak:{count:0,lastDate:null}, combo:{count:0,date:null},
-              history:[], lastVisit:null, totalDone:0, ach:[], planDate:null,
+              history:[], lastVisit:null, totalDone:0, ach:[], planDate:null, planV:0,
               checkinDate:null, notes:[], spent:0, myTasks:[], skipped:[],
               rewards:[
                 {id:1, name:"Час с книгой без чувства вины", cost:40},
@@ -1192,14 +1201,18 @@ function dayTick() {
     state.migratedDone = true; changed = true;
   }
   if (state.lastVisit !== today()) { handleNewDay(); changed = true; }
-  if (state.planDate !== today()) { buildPlan(); changed = true; }
+  if (state.planDate !== today() || state.planV !== PLAN_V) { buildPlan(); changed = true; }
   if (changed) save();
   if (!ui.showForm && !ui.checkin) render();
 }
 
 /* пробуждение из памяти телефона: проверяем смену дня и обновляем экран */
+var lastWake = 0;
 function wakeUp() {
-  }
+  if (Date.now() - lastWake < 30000) { dayTick(); return; }   /* без штурма сети при частых переключениях */
+  lastWake = Date.now();
+  syncPull(true, dayTick);
+}
 document.addEventListener("visibilitychange", function(){
   if (document.visibilityState === "visible") wakeUp();
 });
