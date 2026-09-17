@@ -191,7 +191,7 @@
 
 <script>
 "use strict";
-var APP_VERSION = "2.5";
+var APP_VERSION = "2.6";
 var KEY = "daria-energy-vessels";
 
 var CORES = [
@@ -280,17 +280,25 @@ var ACHS = [
 ];
 
 /* ── АВТОПЛАНИРОВЩИК ── */
-var PLAN_V = 2;       // меняется вместе с составом рутины: план пересобирается в тот же день
+var PLAN_V = 3;       // меняется вместе с составом рутины: план пересобирается в тот же день
 var PLANNER = {
-  size: 9,            // будни: рутина (5) + 4 задачи под просевшие сферы
-  weekendSize: 7,     // выходные: рутина (4) + 3 задачи
+  size: 16,           // будни: рутина (12) + 4 задачи под просевшие сферы
+  weekendSize: 13,    // выходные: рутина (10) + 3 задачи
   anchor: [2026, 6, 8], // 08.07.2026 — точка отсчёта директорских дней (раз в 2 недели, среда)
   rituals: [   /* утренняя рутина — попадает в план всегда, до умного добора */
     { name:"Стакан воды",       e:{energy:5, spirit:0, focus:0},  weekend:true  },
     { name:"Контрастный душ",   e:{energy:10,spirit:0, focus:0},  weekend:true  },
     { name:"Зарядка утром",     e:{energy:10,spirit:0, focus:5},  weekend:true  },
     { name:"Массаж",            e:{energy:10,spirit:10,focus:0},  weekend:true, blocks:"Массаж / баня" },
-    { name:"Планирование дня",  e:{energy:0, spirit:0, focus:10}, weekend:false }
+    { name:"Планирование дня",  e:{energy:0, spirit:0, focus:10}, weekend:false },
+    /* обязательные ежедневные пункты (с 17.09.2026) */
+    { name:"Прогулка",          e:{energy:10,spirit:10,focus:0},  weekend:true  },
+    { name:"Выйти на природу",  e:{energy:5, spirit:15,focus:0},  weekend:true  },
+    { name:"Дорога / пробки",   e:{energy:-10,spirit:0,focus:0},  weekend:false },
+    { name:"Правильный завтрак", e:{energy:10,spirit:0, focus:5},  weekend:true  },
+    { name:"Правильный обед",   e:{energy:10,spirit:0, focus:5},  weekend:true, blocks:"Здоровый обед" },
+    { name:"Чтение книги",      e:{energy:0, spirit:10,focus:5},  weekend:true  },
+    { name:"Позвонить близким", e:{energy:0, spirit:10,focus:0},  weekend:true, blocks:"Позвонить родителям" }
   ]
 };
 function stripTime(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
